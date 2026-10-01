@@ -13,6 +13,63 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
+# Executable Business Cycle concept application
+CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
+COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
+
+def cycle_series(iso3, start=1990):
+    frames=[]
+    for name,code in CYCLE_INDICATORS.items():
+        try:
+            d=worldbank_country(code,iso3,start=start).rename(columns={"value":name})
+            if not d.empty: frames.append(d.set_index("year"))
+        except Exception:
+            pass
+    if not frames: return pd.DataFrame()
+    d=pd.concat(frames,axis=1).sort_index().reset_index()
+    d["GDP Growth Change"]=d["Real GDP Growth"].diff()
+    d["Unemployment Change"]=d["Unemployment"].diff()
+    d["Inflation Change"]=d["Inflation"].diff()
+    return d
+
+def _cycle_slope(series, window=3):
+    s=pd.Series(series).dropna().tail(window)
+    return float(np.polyfit(np.arange(len(s)),s.to_numpy(),1)[0]) if len(s)>=2 else np.nan
+
+def classify_business_cycle(d):
+    if d.empty or "Real GDP Growth" not in d or len(d.dropna(subset=["Real GDP Growth"]))<5:
+        return {"phase":"Insufficient Data","confidence":0.0,"score":0.0}
+    d=d.dropna(subset=["Real GDP Growth"]); g=d["Real GDP Growth"]; u=d["Unemployment"]
+    latest=float(g.iloc[-1]); slope=_cycle_slope(g); uslope=_cycle_slope(u); accel=float(g.iloc[-1]-g.iloc[-2])
+    score=2 if latest>2 else 1 if latest>0 else -2 if latest<-1 else -1
+    score += 1 if slope>.25 else -1 if slope<-.25 else 0
+    score += 1 if pd.notna(uslope) and uslope<-.15 else -1 if pd.notna(uslope) and uslope>.15 else 0
+    score += .5 if accel>.4 else -.5 if accel<-.4 else 0
+    recent=g.tail(4); peak=len(recent)>=3 and g.iloc[-1]<recent.max() and slope<0; trough=len(recent)>=3 and g.iloc[-1]>recent.min() and slope>0
+    if score>=2: phase="Trough" if trough else "Expansion"
+    elif score<=-2: phase="Peak" if peak else "Contraction"
+    elif peak: phase="Peak"
+    elif trough: phase="Trough"
+    else: phase="Expansion" if slope>=0 else "Contraction"
+    evidence=np.mean([latest>0,slope>0,pd.notna(uslope) and uslope<0,accel>0])
+    confidence=evidence if phase in {"Expansion","Trough"} else 1-evidence
+    return {"phase":phase,"confidence":round(float(max(0,min(1,confidence))),2),"score":round(float(score),2),"gdp_growth":latest,"gdp_slope":slope,"unemployment_slope":uslope,"inflation":float(d["Inflation"].iloc[-1]) if pd.notna(d["Inflation"].iloc[-1]) else np.nan}
+
+def business_cycle_panel(iso3,label):
+    d=cycle_series(iso3)
+    if d.empty:
+        st.warning(f"No sufficient macroeconomic data returned for {label} ({iso3})."); return
+    current=classify_business_cycle(d); phase=current["phase"]
+    st.subheader(f"Business Cycle — {label}")
+    st.caption("Applied concept: Business Cycle. The classification uses GDP growth, GDP momentum, unemployment direction and inflation context. It is an analytical classification, not an official recession declaration.")
+    a,b,c,dcol=st.columns(4)
+    a.metric("Current Phase",phase); b.metric("Confidence",f"{current['confidence']*100:.0f}%"); c.metric("Real GDP Growth",f"{current.get('gdp_growth',np.nan):.2f}%"); dcol.metric("Inflation",f"{current.get('inflation',np.nan):.2f}%")
+    view=d.copy()
+    view["Phase"]=[classify_business_cycle(view.iloc[:i+1])["phase"] for i in range(len(view))]
+    st.plotly_chart(px.line(view,x="year",y="Real GDP Growth",markers=True,title=f"{label}: Real GDP Growth with Business-Cycle Context"),use_container_width=True)
+    st.dataframe(view[["year","Real GDP Growth","Inflation","Unemployment","Investment Growth","Phase"]].tail(20),use_container_width=True,hide_index=True)
+    st.info(f"Concept application: {phase} is the current analytical regime. GDP slope = {current.get('gdp_slope',np.nan):.2f}; unemployment slope = {current.get('unemployment_slope',np.nan):.2f}. These are evidence for analysis, not a guaranteed forecast.")
+
 from global_bloc_finance.global_intelligence import (
     FINANCIAL_DOMAINS, ECONOMIC_BLOCS, REGIONS, MAP_INDICATORS,
     worldbank_all, worldbank_country, bloc_members, map_figure,
@@ -58,6 +115,11 @@ def overview():
             st.plotly_chart(px.line(d,y="Close",title=f"{ticker} Price History"),use_container_width=True)
             m=pd.DataFrame({"Metric":["Return","Volatility","Sharpe","Max Drawdown"],"Value":[close.iloc[-1]/close.iloc[0]-1,ret.std()*np.sqrt(252),ret.mean()/ret.std()*np.sqrt(252),(close/close.cummax()-1).min()]})
             st.dataframe(m,use_container_width=True,hide_index=True); st.download_button("Download CSV",d.to_csv().encode(),f"{ticker}_market.csv","text/csv")
+            try:
+                company=info(ticker); country=company.get("country"); iso3=COUNTRY_ISO3.get(country)
+                if iso3: business_cycle_panel(iso3,f"{ticker} company economy ({country})")
+                else: st.info(f"Business-cycle mapping is not yet available for company country: {country or 'Unknown'}")
+            except Exception as e: st.warning(f"Company-economy cycle analysis unavailable: {e}")
 
 def economics():
     st.header("Economics"); countries={"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA"}; inds={"GDP growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Exports (% GDP)":"NE.EXP.GNFS.ZS","Imports (% GDP)":"NE.IMP.GNFS.ZS"}
@@ -139,6 +201,11 @@ def global_economy():
             st.download_button("Export map data", d.to_csv(index=False).encode(), "global_economy_map.csv", "text/csv")
         except Exception as e:
             st.error(f"Global map request failed: {e}")
+
+    st.subheader("Applied economic concepts")
+    cycle_country=st.selectbox("Economy to analyze",["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX"],key="cycle_country")
+    if st.button("Apply Business Cycle concept",type="secondary"):
+        business_cycle_panel(cycle_country,cycle_country)
 
     st.subheader("Global market and exchange analysis")
     tickers = st.text_input("Market/exchange tickers", "AAPL,MSFT,NVDA,TSM,7203.T,005930.KS")
