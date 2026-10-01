@@ -326,7 +326,12 @@ def economics_concepts():
         selected = next(x for x in concepts if x["name"] == selected_name)
         st.write({"Definition / Formula": selected["formula"], "World Bank indicator": selected.get("indicator") or "Concept requires a specialized calculation/data source."})
         indicator_code = selected.get("indicator")
-        if indicator_code:
+        if selected_name == "Business Cycle":
+            country = st.selectbox("ISO-3 economy", ["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX"], key=f"concept_business_cycle_{kind}")
+            if st.button("Apply Business Cycle concept", type="primary", key=f"apply_business_cycle_{kind}"):
+                business_cycle_panel(country, country)
+                recession_intelligence_panel(country, country)
+        elif indicator_code:
             country = st.text_input("ISO-3 country code", "USA").upper().strip()
             if st.button("Calculate historical series"):
                 try:
