@@ -14,7 +14,8 @@ from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
 from global_bloc_finance.recession_intelligence import assess_country, assess_bloc
-from global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)\nfrom global_bloc_finance.concept_securities import securities_for_concept, concept_security_categories
+from global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
+from global_bloc_finance.concept_securities import securities_for_concept, concept_security_categories
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
@@ -533,7 +534,8 @@ def institutional_products_dashboard():
         })
         st.caption("Commercial identifiers, transaction-level data and proprietary analytics must be resolved through licensed/reference-data sources rather than guessed.")
 
-def ratings_research_intelligence()\n    institutional_products_dashboard():
+def ratings_research_intelligence():
+    institutional_products_dashboard()
     st.header("Ratings, Research & Financial Intelligence")
     st.caption("Institutional research layer for credit ratings, equity research, market intelligence, bank research, ESG, risk providers, regulatory reports and financial instruments.")
     tabs = st.tabs(["Providers","Credit Ratings","Regulatory Intelligence","API Architecture","Products"])
@@ -954,3 +956,9 @@ def economics_concepts():
     st.write("Mapped security groups:", ", ".join(concept_security_categories(selected_name)))
     concept_security_panel(selected_name)
 )
+# GlobalBLOCS credentialed API ingestion page.
+st.sidebar.markdown("---")
+st.sidebar.subheader("Data Connections")
+_api_page = st.sidebar.selectbox("Workspace", ["Dashboard", "Credentialed API Ingestion"], key="globalblocs_workspace")
+if _api_page == "Credentialed API Ingestion":
+    api_ingestion_dashboard()
