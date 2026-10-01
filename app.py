@@ -18,6 +18,7 @@ from global_bloc_finance.recession_intelligence import assess_country, assess_bl
 from global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
 from global_bloc_finance.concept_securities import securities_for_concept, concept_security_categories
 from global_bloc_finance.api_ingestion import APIConfig, AUTH_METHODS, request_api, normalize_ingested_data, analytical_summary, trend_summary
+from global_bloc_finance.api_etl_eda import api_etl_eda_pipeline, infer_data_dictionary
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
