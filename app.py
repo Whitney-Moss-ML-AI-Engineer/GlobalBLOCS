@@ -13,7 +13,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
-from global_bloc_finance.recession_intelligence import assess_country, assess_bloc\nfrom global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
+from global_bloc_finance.recession_intelligence import assess_country, assess_bloc
+from global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
