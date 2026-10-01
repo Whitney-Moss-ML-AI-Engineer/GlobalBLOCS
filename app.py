@@ -232,6 +232,173 @@ def installation():
         except Exception as e: rows.append({"Package":p,"Status":"Missing","Version":str(e)})
     st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True); st.code("pip install -r requirements.txt",language="bash"); st.info("Runtime diagnostics only; no silent OS changes.")
 
+
+US_MACRO_INDICATORS = {
+    "GDP & Output": {
+        "Real GDP":"GDPC1","Real GDP Growth":"A191RL1Q225SBEA","GDP Deflator":"GDPDEF",
+        "Personal Consumption":"PCECC96","Private Investment":"GPDI","Government Spending":"GCEC1",
+        "Net Exports":"NETEXP"
+    },
+    "Inflation": {
+        "CPI":"CPIAUCSL","Core CPI":"CPILFESL","PCE":"PCEPI","Core PCE":"PCEPILFE",
+        "PPI":"PPIACO","Import Prices":"IR3TIB01USM156N","Employment Cost Index":"ECIWAG"
+    },
+    "Labor Market": {
+        "Unemployment Rate":"UNRATE","Nonfarm Payrolls":"PAYEMS","Labor Force Participation":"CIVPART",
+        "Average Hourly Earnings":"CES0500000003","Job Openings":"JTSJOL",
+        "Initial Claims":"ICSA","Continuing Claims":"CCSA","Quits":"JTSQUR"
+    },
+    "Consumer": {
+        "Retail Sales":"RSAFS","Real Personal Income":"W875RX1","Personal Income":"PI",
+        "Personal Saving Rate":"PSAVERT","Consumer Credit":"TOTALSL"
+    },
+    "Housing": {
+        "Housing Starts":"HOUST","Building Permits":"PERMIT","New Home Sales":"HSN1F",
+        "Existing Home Sales":"EXHOSLUSM495S","Case-Shiller Home Price Index":"CSUSHPINSA",
+        "30Y Mortgage Rate":"MORTGAGE30US","Housing Inventory":"HNFSEPUSSA"
+    },
+    "Manufacturing": {
+        "Industrial Production":"INDPRO","Capacity Utilization":"TCU",
+        "Manufacturers New Orders":"AMTMNO","Durable Goods Orders":"DGORDER",
+        "Business Inventories":"BUSINV","Labor Productivity":"OPHPBS"
+    },
+    "Financial Markets": {
+        "S&P 500":"SP500","10Y Treasury Yield":"DGS10","2Y Treasury Yield":"DGS2",
+        "10Y-2Y Spread":"T10Y2Y","Corporate Bond Spread":"BAA10Y",
+        "VIX":"VIXCLS","Trade Weighted Dollar":"DTWEXBGS","Gold":"GOLDAMGBD228NLBM",
+        "Crude Oil":"DCOILWTICO"
+    },
+    "Banking & Money": {
+        "M2":"M2SL","Bank Credit":"H8B1247NCBCMG","Commercial & Industrial Loans":"BUSLOANS",
+        "Fed Total Assets":"WALCL","Reserve Balances":"WRESBAL","Reverse Repo":"RRPONTSYD"
+    },
+    "Federal Reserve": {
+        "Federal Funds Rate":"FEDFUNDS","Discount Rate":"DISCOUNT",
+        "10Y Treasury Yield":"DGS10","Fed Total Assets":"WALCL",
+        "Reserve Balances":"WRESBAL"
+    },
+    "Government & Fiscal": {
+        "Federal Debt":"GFDEBTN","Federal Debt / GDP":"GFDEGDQ188S",
+        "Federal Receipts":"FGRECPT","Federal Expenditures":"FGEXPND",
+        "Federal Budget Balance":"MTSDS133FMS"
+    },
+    "International": {
+        "Trade Balance":"BOPGSTB","Current Account":"IEABC",
+        "Exports":"EXPGSC1","Imports":"IMPGSC1","Broad Dollar Index":"DTWEXBGS"
+    },
+    "Productivity & Innovation": {
+        "Labor Productivity":"OPHPBS","Total Factor Productivity":"RTFPNAUSA632NRUG",
+        "Private Fixed Investment":"PNFI","R&D Investment":"Y057RC1Q027SBEA"
+    }
+}
+
+US_MACRO_PILLARS = {
+    "Growth":"GDP, Industrial Production, Retail Sales, Housing, PMI/ISM",
+    "Labor":"Unemployment, Payrolls, JOLTS, Claims, Wages",
+    "Inflation":"CPI, PCE, PPI, Employment Costs, GDP Deflator",
+    "Financial Conditions":"Fed Funds, Treasury Curve, Credit Spreads, Dollar, VIX, Money Supply"
+}
+
+@st.cache_data(ttl=900)
+def fred_series(series_id, start="2000-01-01"):
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+    r = requests.get(url, params={"id":series_id,"cosd":start}, timeout=20)
+    r.raise_for_status()
+    d = pd.read_csv(pd.io.common.BytesIO(r.content))
+    value_col = [x for x in d.columns if x.upper() != "DATE"][0]
+    d["DATE"] = pd.to_datetime(d["observation_date"] if "observation_date" in d.columns else d["DATE"], errors="coerce")
+    d["value"] = pd.to_numeric(d[value_col], errors="coerce")
+    return d[["DATE","value"]].dropna().sort_values("DATE")
+
+def us_business_cycle_screen(data):
+    if data.empty or len(data) < 8:
+        return {"phase":"Insufficient Data","confidence":0.0}
+    latest = data.iloc[-1]
+    g = float(latest.get("Real GDP Growth", np.nan))
+    u_slope = data["Unemployment Rate"].dropna().tail(6)
+    u_slope = _cycle_slope(u_slope, min(6, len(u_slope))) if len(u_slope) >= 2 else np.nan
+    ip_slope = _cycle_slope(data["Industrial Production"].dropna().tail(6), 6) if data["Industrial Production"].notna().sum() >= 2 else np.nan
+    spread = float(latest.get("10Y-2Y Spread", np.nan))
+    score = 0
+    score += 2 if g > 2 else 1 if g > 0 else -2 if g < -1 else -1
+    score += -1 if pd.notna(u_slope) and u_slope > 0.05 else 1 if pd.notna(u_slope) and u_slope < -0.05 else 0
+    score += 1 if pd.notna(ip_slope) and ip_slope > 0 else -1 if pd.notna(ip_slope) and ip_slope < 0 else 0
+    score += 1 if spread > 0 else -1
+    if score >= 3: phase="Expansion"
+    elif score <= -2: phase="Contraction"
+    else: phase="Peak" if g > 2 and spread < 0 else "Trough" if g <= 0 and ip_slope > 0 else "Transition"
+    return {"phase":phase,"score":score,"confidence":round(min(1,max(0,abs(score)/5)),2)}
+
+def us_macro_dashboard():
+    st.header("🇺🇸 U.S. Macroeconomic Analysis")
+    st.caption("The U.S. economy is used as a living macroeconomic case study. Data are organized by business-cycle phase, economic sector and the four professional macro pillars.")
+    st.info("This module is an analytical research screen. Business-cycle classifications are model-derived; official recession dating is represented separately through the NBER/FRED recession indicator when available.")
+
+    st.subheader("Level 1 — Business Cycle")
+    cycle_data = {}
+    for label, sid in {
+        "Real GDP Growth":"A191RL1Q225SBEA","Unemployment Rate":"UNRATE",
+        "Industrial Production":"INDPRO","10Y-2Y Spread":"T10Y2Y"
+    }.items():
+        try:
+            cycle_data[label] = fred_series(sid, "1990-01-01").set_index("DATE")["value"]
+        except Exception:
+            cycle_data[label] = pd.Series(dtype=float)
+    cycle = pd.concat(cycle_data, axis=1).dropna(how="all")
+    cycle_screen = us_business_cycle_screen(cycle)
+    a,b,c,d = st.columns(4)
+    a.metric("Analytical Phase", cycle_screen["phase"])
+    b.metric("Screen Confidence", f'{cycle_screen["confidence"]*100:.0f}%')
+    b2 = cycle["Real GDP Growth"].dropna()
+    c.metric("Latest GDP Growth", "N/A" if b2.empty else f"{b2.iloc[-1]:.2f}%")
+    d.metric("10Y−2Y Spread", "N/A" if cycle["10Y-2Y Spread"].dropna().empty else f'{cycle["10Y-2Y Spread"].dropna().iloc[-1]:.2f}%')
+
+    try:
+        rec = fred_series("USREC", "1960-01-01")
+        st.subheader("Official recession reference")
+        st.caption("USREC is the FRED representation of recession periods identified by the National Bureau of Economic Research (NBER).")
+        st.line_chart(rec.set_index("DATE")["value"])
+    except Exception:
+        pass
+
+    st.subheader("Master Dashboard — Four Macro Pillars")
+    pillar_cols = st.columns(4)
+    for col, (pillar, indicators) in zip(pillar_cols, US_MACRO_PILLARS.items()):
+        with col:
+            st.markdown(f"**{pillar}**")
+            st.caption(indicators)
+
+    category = st.selectbox("Indicator category", list(US_MACRO_INDICATORS.keys()), key="us_macro_category")
+    indicator_name = st.selectbox("Indicator", list(US_MACRO_INDICATORS[category].keys()), key="us_macro_indicator")
+    series_id = US_MACRO_INDICATORS[category][indicator_name]
+    try:
+        d = fred_series(series_id, "2000-01-01")
+        latest = d.iloc[-1]
+        previous = d.iloc[-2] if len(d) > 1 else latest
+        change = float(latest["value"] - previous["value"]) if len(d) > 1 else np.nan
+        direction = "↑ Rising" if change > 0 else "↓ Falling" if change < 0 else "→ Stable"
+        a,b,c = st.columns(3)
+        a.metric("Latest Value", f'{latest["value"]:,.3f}')
+        b.metric("Change vs. Prior Observation", f"{change:,.3f}" if pd.notna(change) else "N/A")
+        c.metric("Direction", direction)
+        st.plotly_chart(px.line(d, x="DATE", y="value", title=f"U.S. {indicator_name} ({series_id})"), use_container_width=True)
+        st.dataframe(d.tail(20), use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"FRED data request failed for {series_id}: {e}")
+
+    st.subheader("Professional Economic Analysis Workflow")
+    workflow = [
+        ("1","Business Cycle","Classify expansion, peak, contraction/recession evidence or trough using growth, labor, inflation and leading indicators."),
+        ("2","Aggregate Demand / Supply","Determine whether major changes appear demand-driven, supply-driven or mixed."),
+        ("3","Monetary Policy","Evaluate the Federal Funds Rate, balance sheet, Treasury curve and Federal Reserve communication."),
+        ("4","Fiscal Policy","Evaluate federal spending, receipts, deficits, debt and Treasury financing."),
+        ("5","Financial Markets","Analyze equities, rates, credit spreads, volatility, commodities and the dollar."),
+        ("6","International Sector","Analyze trade, exchange rates, capital flows and global conditions."),
+        ("7","Research Horizon","Build a documented 6–24 month scenario analysis for growth, inflation, unemployment, rates and asset markets.")
+    ]
+    st.dataframe(pd.DataFrame(workflow, columns=["Step","Analysis","Core Question"]), use_container_width=True, hide_index=True)
+    st.caption("Outlooks should be expressed as scenarios with supporting evidence and uncertainty, not as guaranteed forecasts.")
+
 def global_economy():
     st.header("Global Economy & Economic BLOCs")
     st.caption("Select a world region or economic BLOC, then analyze macroeconomic conditions, markets, exchanges and financial metrics.")
@@ -574,7 +741,7 @@ pages={
     "Commodities Market":lambda: market_type_page("Commodities Market"),
     "Cryptocurrency Market":lambda: market_type_page("Cryptocurrency Market"),
     "50 Investment Metrics":investment_metrics_page,
-    "Global Economy":global_economy,
+    "U.S. Macroeconomic Analysis":us_macro_dashboard,\n    "Global Economy":global_economy,
     "12 Intelligence Domains":financial_domains,
     "Economics":economics,
     "Macroeconomic Concepts":lambda: (st.session_state.update(concept_mode="Macroeconomics"), economics_concepts())[1],
