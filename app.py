@@ -259,16 +259,36 @@ def global_economy():
     if st.button("Apply Business Cycle concept",type="secondary"):
         business_cycle_panel(cycle_country,cycle_country)
 
-    st.subheader("Country recession analysis")
-    recession_country=st.selectbox("Country",["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX"],key="recession_country")
-    if st.button("Analyze country recession evidence",type="secondary"):
-        recession_intelligence_panel(recession_country,recession_country)
+    st.subheader("Recession Intelligence Dashboard")
+    st.caption("Country and Economic BLOC recession evidence is evaluated from macroeconomic and activity indicators. Results are transparent analytical screens, not official recession-dating decisions.")
 
-    if bloc != "None":
-        st.subheader("Economic BLOC recession analysis")
-        if st.button(f"Analyze {bloc} recession evidence",type="secondary"):
+    recession_country=st.selectbox("Country for recession analysis",["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX","FRA","ITA","ESP","SGP","SAU","ARE"],key="recession_country")
+    recession_scope = st.radio("Recession analysis scope",["Country","Economic BLOC"],horizontal=True,key="recession_scope")
+
+    if recession_scope == "Country":
+        if st.button("Analyze country recession evidence",type="secondary",key="analyze_country_recession"):
+            recession_intelligence_panel(recession_country,recession_country)
+    elif bloc == "None":
+        st.info("Select an Economic BLOC above to enable BLOC-wide recession analysis.")
+    else:
+        st.write(f"Selected BLOC: **{bloc}** • {len(members)} member economies")
+        if st.button(f"Analyze {bloc} recession evidence",type="secondary",key="analyze_bloc_recession"):
             bloc_recession_panel(bloc,members)
 
+    with st.expander("Recession evidence framework", expanded=False):
+        st.dataframe(pd.DataFrame([
+            ["Real GDP growth","↓","High","Core output contraction/expansion signal"],
+            ["GDP per-capita growth","↓","High","Per-person economic activity"],
+            ["Household consumption","↓","Medium","Household demand"],
+            ["Investment","↓","Medium","Business/capital formation"],
+            ["Unemployment trend","↑","High","Labor-market weakening"],
+            ["Manufacturing / industry","↓","Medium","Production-cycle evidence"],
+            ["Services","↓","Medium","Service-sector activity"],
+            ["Trade","↓","Medium","External-demand conditions"],
+            ["Inflation","Context","Context","Separates demand weakness from price dynamics"],
+            ["Leading indicators","↓","High","Future turning-point evidence when available"],
+        ], columns=["Evidence","Recession direction","Weight","Interpretation"]), use_container_width=True, hide_index=True)
+        st.info("GlobalBLOCS separates official recession determinations, GDP-rule screens, broad recession evidence, business-cycle phase, and leading recession risk. The current international screen primarily uses annual World Bank data; quarterly official series can be added as higher-frequency evidence.")
     st.subheader("Global market and exchange analysis")
     tickers = st.text_input("Market/exchange tickers", "AAPL,MSFT,NVDA,TSM,7203.T,005930.KS")
     domain = st.selectbox("Financial-intelligence domain", [x["name"] for x in FINANCIAL_DOMAINS])
