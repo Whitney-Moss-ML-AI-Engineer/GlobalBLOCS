@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
-from global_bloc_finance.recession_intelligence import assess_country, assess_bloc
+from global_bloc_finance.recession_intelligence import assess_country, assess_bloc\nfrom global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, regulatory_source_config, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
@@ -399,7 +399,147 @@ def us_macro_dashboard():
     st.dataframe(pd.DataFrame(workflow, columns=["Step","Analysis","Core Question"]), use_container_width=True, hide_index=True)
     st.caption("Outlooks should be expressed as scenarios with supporting evidence and uncertainty, not as guaranteed forecasts.")
 
-def global_economy():
+
+
+def ratings_research_intelligence():
+    st.header("Ratings, Research & Financial Intelligence")
+    st.caption("Institutional research layer for credit ratings, equity research, market intelligence, bank research, ESG, risk providers, regulatory reports and financial instruments.")
+    tabs = st.tabs(["Providers","Credit Ratings","Regulatory Intelligence","API Architecture","Products"])
+
+    with tabs[0]:
+        st.subheader("Institutional information-provider registry")
+        providers = pd.DataFrame(provider_dataframe())
+        categories = ["All"] + sorted(providers["category"].unique().tolist())
+        cat = st.selectbox("Provider category", categories, key="provider_category")
+        search = st.text_input("Search provider", key="provider_search")
+        view = providers if cat == "All" else providers[providers["category"] == cat]
+        if search.strip():
+            view = view[view["name"].str.contains(search.strip(), case=False, na=False)]
+        st.metric("Providers in registry", len(view))
+        st.dataframe(view[["name","category","focus","priority","access"]], use_container_width=True, hide_index=True)
+        st.download_button("Export provider registry", view.to_csv(index=False).encode(), "globalblocs_research_providers.csv", "text/csv")
+        st.subheader("Core institutional research set")
+        st.dataframe(pd.DataFrame(priority_provider_dataframe())[["name","category","focus","access"]], use_container_width=True, hide_index=True)
+
+    with tabs[1]:
+        st.subheader("Credit-rating intelligence")
+        st.write("Ratings should be treated as source observations rather than as GlobalBLOCS recommendations. Preserve the agency, rating action, rating date, security/issuer, outlook/watch status, methodology and source document.")
+        rating_scale = pd.DataFrame([
+            ["Investment grade","AAA / AA / A / BBB","Higher relative credit quality under the agency's methodology"],
+            ["Speculative grade","BB / B / CCC / CC / C","Higher relative default/credit-risk assessment under the agency's methodology"],
+            ["Default / distressed","D / RD or agency-specific equivalent","Use the exact agency definition; scales differ"],
+        ], columns=["Grouping","Illustrative ratings","Research interpretation"])
+        st.dataframe(rating_scale, use_container_width=True, hide_index=True)
+        st.info("Agency scales and definitions are not perfectly interchangeable. GlobalBLOCS should retain the original agency rating and separately map it to a normalized analytical scale.")
+        templates = pd.DataFrame(RATING_API_TEMPLATES)
+        st.dataframe(templates[["provider","auth","endpoint","example_query"]], use_container_width=True, hide_index=True)
+        st.warning("Commercial rating APIs are entitlement-controlled. Endpoint URLs and authentication flows shown here are configuration placeholders, not claims that the listed endpoints are publicly callable.")
+
+        provider = st.selectbox("Provider for request template", templates["provider"].tolist(), key="rating_provider")
+        endpoint = st.text_input("Licensed endpoint", "", key="rating_endpoint")
+        ticker = st.text_input("Issuer / ticker", "MSFT", key="rating_issuer")
+        if st.button("Generate credentialed request template", key="generate_rating_request"):
+            if not endpoint.strip():
+                st.warning("Enter the endpoint supplied by the licensed provider documentation.")
+            else:
+                request_template = credentialed_request_template(provider, endpoint.strip(), params={"issuer_or_ticker": ticker})
+                st.code(
+                    "import requests\\n\\n"
+                    f"url = {request_template['endpoint']!r}\\n"
+                    f"headers = {request_template['headers']!r}\\n"
+                    f"params = {request_template['params']!r}\\n"
+                    "response = requests.get(url, headers=headers, params=params, timeout=30)\\n"
+                    "response.raise_for_status()\\n"
+                    "data = response.json()",
+                    language="python"
+                )
+
+    with tabs[2]:
+        st.subheader("U.S. Financial Regulatory Intelligence")
+        regs = pd.DataFrame(regulatory_dataframe())
+        agency = st.selectbox("Regulatory agency", regs["agency"].tolist(), key="reg_agency")
+        selected_reg = regs[regs["agency"] == agency].iloc[0]
+        a,b,c = st.columns(3)
+        a.metric("Agency", agency.split(" (")[0])
+        b.metric("Primary reports", selected_reg["reports"])
+        c.metric("Access", selected_reg["public_access"])
+        st.dataframe(regs[["agency","reports","purpose","public_access"]], use_container_width=True, hide_index=True)
+        st.subheader("Regulatory data-source configuration")
+        source_name = st.selectbox("Source configuration", list(regulatory_source_config.keys()), key="reg_source")
+        cfg = regulatory_source_config[source_name]
+        st.json(cfg)
+        st.info("Restricted datasets such as SAR filings are not treated as public ingestion targets. GlobalBLOCS should ingest only data for which the user has lawful authorization and the applicable provider terms permit automated use.")
+
+        report = st.selectbox("Research report", [
+            "SEC 10-K","SEC 10-Q","SEC 8-K","SEC Form 4","SEC 13F","FDIC Call Reports",
+            "Federal Reserve FR Y-9C","Federal Reserve Z.1","CFTC COT","FINRA Short Interest",
+            "CFPB Consumer Complaint Database","PCAOB Inspection Reports","OCC Quarterly Banking Profile",
+            "FDIC Bank Failure Data"
+        ], key="reg_report")
+        report_use = {
+            "SEC 10-K":"Annual company financial position, performance, cash flow and risk disclosures.",
+            "SEC 10-Q":"Quarterly company financial and risk disclosures.",
+            "SEC 8-K":"Material current events and corporate disclosures.",
+            "SEC Form 4":"Insider transaction disclosures.",
+            "SEC 13F":"Quarterly institutional investment-manager holdings disclosures.",
+            "FDIC Call Reports":"Bank assets, liabilities, capital, earnings and loan information.",
+            "Federal Reserve FR Y-9C":"Bank holding company consolidated financial information.",
+            "Federal Reserve Z.1":"Financial Accounts of the United States and sectoral balance-sheet/flow relationships.",
+            "CFTC COT":"Futures positioning by trader categories.",
+            "FINRA Short Interest":"Reported short-interest information, subject to dataset definitions and timing.",
+            "CFPB Consumer Complaint Database":"Consumer-finance complaint records and trend analysis.",
+            "PCAOB Inspection Reports":"Public audit-inspection findings and audit-quality information.",
+            "OCC Quarterly Banking Profile":"National-bank profitability, credit quality, capital and risk indicators.",
+            "FDIC Bank Failure Data":"Historical bank-failure events and institution information.",
+        }
+        st.write(report_use[report])
+
+    with tabs[3]:
+        st.subheader("Production ingestion architecture")
+        architecture = [
+            ["1","Licensed / official source","Ratings, research, SEC, FDIC, Federal Reserve, CFTC, FINRA, CFPB and other permitted datasets"],
+            ["2","Source connector","Credential handling, rate limits, retries, pagination and provider-specific schemas"],
+            ["3","Raw / Bronze","Immutable source payload plus retrieval timestamp and source metadata"],
+            ["4","Silver / normalized","Canonical issuer, security, rating, filing, report and observation structures"],
+            ["5","PostgreSQL","Core financial data, metadata, provenance, compliance and analytics schemas"],
+            ["6","Gold / intelligence","350 metrics, trends, risk, credit, valuation, macro and cross-source analytics"],
+            ["7","ML / Deep Learning","Feature engineering, point-in-time joins, walk-forward validation and model monitoring"],
+            ["8","Dashboard / API","Research UI, explain-result views, exports and downstream applications"],
+        ]
+        st.dataframe(pd.DataFrame(architecture, columns=["Layer","Component","Purpose"]), use_container_width=True, hide_index=True)
+        st.subheader("Point-in-time and provenance requirements")
+        st.dataframe(pd.DataFrame([
+            ["provider","Original provider / agency","Required"],
+            ["entity_id","Canonical issuer / company / institution identifier","Required"],
+            ["security_id","Security identifier when applicable","Recommended"],
+            ["rating","Original agency rating or research value","Required for ratings"],
+            ["rating_date","Date of rating action / observation","Required"],
+            ["publication_date","When the report became public/available","Required"],
+            ["available_to_market_date","Earliest time the data could have been used","Required for ML"],
+            ["retrieval_timestamp","When GlobalBLOCS retrieved it","Required"],
+            ["source_document","Filing/report/document identifier","Required"],
+            ["methodology_version","Provider methodology/model version when available","Recommended"],
+            ["quality_grade","A/B/C/D/E reconciliation or quality class","Required"],
+        ], columns=["Field","Definition","Requirement"]), use_container_width=True, hide_index=True)
+        st.info("For research and ML, never join a later restatement or rating action into an earlier prediction window. Point-in-time availability is part of the feature definition.")
+
+    with tabs[4]:
+        st.subheader("50 Financial Products — Research Catalog")
+        products = pd.DataFrame(product_dataframe())
+        pcat = st.selectbox("Product category", ["All"] + sorted(products["category"].unique()), key="product_category")
+        pv = products if pcat == "All" else products[products["category"] == pcat]
+        st.metric("Products in catalog", len(pv))
+        st.dataframe(pv, use_container_width=True, hide_index=True)
+        st.download_button("Export product catalog", pv.to_csv(index=False).encode(), "globalblocs_50_financial_products.csv", "text/csv")
+        selected_product = st.selectbox("Explain product", pv["product"].tolist(), key="selected_financial_product")
+        product_row = pv[pv["product"] == selected_product].iloc[0]
+        st.write({
+            "Product": product_row["product"],
+            "Category": product_row["category"],
+            "Primary research uses": "Pricing, valuation, hedging, credit risk, liquidity, stress testing, scenario analysis and portfolio exposure.",
+            "GlobalBLOCS treatment": "Instrument metadata → market/credit data → risk metrics → scenario analysis → portfolio and macro context."
+        })
+\ndef global_economy():
     st.header("Global Economy & Economic BLOCs")
     st.caption("Select a world region or economic BLOC, then analyze macroeconomic conditions, markets, exchanges and financial metrics.")
     bloc = st.selectbox("Economic BLOC", ["None"] + list(ECONOMIC_BLOCS.keys()))
@@ -740,7 +880,7 @@ pages={
     "Derivatives Market":lambda: market_type_page("Derivatives Market"),
     "Commodities Market":lambda: market_type_page("Commodities Market"),
     "Cryptocurrency Market":lambda: market_type_page("Cryptocurrency Market"),
-    "50 Investment Metrics":investment_metrics_page,
+    "50 Investment Metrics":investment_metrics_page,\n    "Ratings, Research & Regulation":ratings_research_intelligence,
     "U.S. Macroeconomic Analysis":us_macro_dashboard,\n    "Global Economy":global_economy,
     "12 Intelligence Domains":financial_domains,
     "Economics":economics,
