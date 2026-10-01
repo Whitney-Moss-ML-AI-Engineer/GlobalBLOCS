@@ -12,6 +12,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
+from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
 from global_bloc_finance.global_intelligence import (
     FINANCIAL_DOMAINS, ECONOMIC_BLOCS, REGIONS, MAP_INDICATORS,
     worldbank_all, worldbank_country, bloc_members, map_figure,
@@ -206,11 +207,219 @@ def economics_concepts():
                 except Exception as e:
                     st.error(f"Concept data request failed: {e}")
 
+
+MARKET_TYPES = {
+    "Stock Market (Equities)": {
+        "description":"Markets where ownership interests in companies are issued and traded.",
+        "examples":"S&P 500, Nasdaq Composite, individual listed equities",
+        "analytics":"Price/return analysis, valuation, profitability, growth, liquidity, volatility and factor exposure."
+    },
+    "Bond Market (Fixed Income)": {
+        "description":"Markets for debt securities issued by governments, corporations and other borrowers.",
+        "examples":"Treasuries, corporate bonds, municipal bonds",
+        "analytics":"Yield, duration, convexity, spread, credit risk, default risk and curve analysis."
+    },
+    "Forex Market (FX)": {
+        "description":"Markets where currencies are exchanged against one another.",
+        "examples":"EUR/USD, USD/JPY, GBP/USD",
+        "analytics":"Returns, volatility, correlation, carry, relative strength and macro sensitivity."
+    },
+    "Derivatives Market": {
+        "description":"Markets for contracts whose value is linked to an underlying asset, rate, index or commodity.",
+        "examples":"Options, futures, swaps and forwards",
+        "analytics":"Payoff analysis, Greeks, implied volatility, term structure and scenario analysis."
+    },
+    "Commodities Market": {
+        "description":"Markets for physical commodities and contracts linked to them.",
+        "examples":"Crude oil, natural gas, gold, wheat",
+        "analytics":"Price trends, seasonality, volatility, inventory/macro relationships and cross-asset correlations."
+    },
+    "Cryptocurrency Market": {
+        "description":"Markets for digital assets and tokenized networks.",
+        "examples":"Bitcoin, Ethereum and other digital assets",
+        "analytics":"Returns, volatility, drawdown, liquidity, correlation, market structure and on-chain data when available."
+    }
+}
+
+MARKET_TERMS = [
+    ("Stock","Ownership interest in a company"),("Share","One unit of stock"),("Exchange","Organized marketplace for trading"),
+    ("Ticker Symbol","Short identifier for a security"),("Index","Group of securities used to represent a market or segment"),
+    ("Market Cap","Market value of equity"),("Liquidity","Ease of transacting without materially moving price"),
+    ("Volatility","Magnitude of price variation"),("Bull Market","Sustained rising-price environment"),
+    ("Bear Market","Sustained falling-price environment"),("Bid Price","Price a buyer is willing to pay"),
+    ("Ask Price","Price at which a seller is willing to transact"),("Spread","Difference between bid and ask"),
+    ("Order","Instruction to transact"),("Market Order","Order intended for immediate execution"),
+    ("Limit Order","Order constrained by a specified price"),("Stop-Loss","Conditional order intended to limit a loss"),
+    ("Take Profit","Conditional order intended to lock in a specified gain"),("Volume","Quantity traded"),
+    ("Slippage","Difference between expected and executed price"),("Trend","General direction of a price series"),
+    ("Support","Price area where prior buying activity has appeared"),("Resistance","Price area where prior selling activity has appeared"),
+    ("Breakout","Move beyond a previously defined resistance area"),("Breakdown","Move below a previously defined support area"),
+    ("Trendline","Line used to summarize directional price structure"),("Channel","Range bounded by two trendlines"),
+    ("Consolidation","Period of relatively limited directional movement"),("Pullback","Temporary move against a prevailing trend"),
+    ("Reversal","Change from one prevailing directional pattern to another"),("Moving Average","Average price calculated over a rolling window"),
+    ("Exponential Moving Average","Moving average assigning greater weight to recent observations"),
+    ("RSI","Momentum oscillator based on recent gains and losses"),("MACD","Momentum/trend indicator based on moving-average differences"),
+    ("Bollinger Bands","Volatility bands around a moving average"),("Momentum","Rate of change in a price or return series"),
+    ("Revenue","Company sales or operating income"),("Earnings","Company profit after expenses"),
+    ("EPS","Earnings attributable per share"),("P/E","Price relative to earnings"),("Dividend","Distribution of company profits to shareholders"),
+    ("Balance Sheet","Statement of assets, liabilities and equity"),("Cash Flow","Movement of cash through operating, investing and financing activities"),
+    ("Growth Stock","Security associated with relatively high expected growth"),("Value Stock","Security characterized by valuation measures relative to fundamentals"),
+    ("Diversification","Spreading exposure across assets or risk sources"),("Portfolio","Collection of investments"),
+    ("Risk Management","Process of identifying, measuring and controlling risk"),("Leverage","Use of borrowed capital or other amplified exposure"),
+    ("Margin","Collateralized borrowing or account requirement for trading"),("Hedging","Using an offsetting exposure to reduce a risk"),
+    ("Drawdown","Decline from a prior peak"),("Risk-Reward Ratio","Comparison of potential gain and potential loss"),
+    ("Market Sentiment","Aggregate market attitudes reflected in observable behavior"),("FOMO","Fear of missing out"),
+    ("Panic Selling","Rapid selling associated with stressed market conditions"),("Institutional Buying","Observable purchases associated with large institutions"),
+    ("Liquidity Zones","Price areas associated with elevated historical trading activity"),("Order Flow","Sequence and imbalance of buying and selling orders"),
+    ("Smart Money","Informal term for sophisticated or institutional market participants")
+]
+
+def _trend_badge(direction):
+    if direction in ("Trending Up","Improving"):
+        return "🟢"
+    if direction in ("Trending Down","Deteriorating"):
+        return "🔴"
+    if direction in ("Sideways","Stable"):
+        return "🟡"
+    return "⚪"
+
+def investment_metrics_page():
+    st.header("50 Investment Metrics")
+    st.caption("Every metric is calculated from the selected security/portfolio where the required data are available. Direction describes movement of the metric; it is not a recommendation.")
+    tickers = st.text_input("Security ticker(s), comma-separated", "AAPL", key="investment_metric_tickers").upper()
+    benchmark = st.text_input("Benchmark ticker", "SPY", key="investment_metric_benchmark").upper().strip()
+    period = st.selectbox("Calculation history", ["1y","2y","5y","10y","max"], index=1, key="investment_metric_period")
+    category = st.selectbox("Metric category", ["All"] + sorted({x[2] for x in METRICS}), key="investment_metric_category")
+    selected_names = [x[1] for x in METRICS if category == "All" or x[2] == category]
+    selected_metric = st.selectbox("Explain a metric", selected_names, key="investment_metric_selected")
+    if st.button("Calculate 50 investment metrics", type="primary"):
+        symbols = [x.strip() for x in tickers.split(",") if x.strip()]
+        if not symbols:
+            st.warning("Enter at least one ticker.")
+            return
+        try:
+            primary = symbols[0]
+            primary_df = market_data(primary, period)
+            bench_df = market_data(benchmark, period) if benchmark else None
+            portfolio = pd.concat(
+                [market_data(s, period).Close.rename(s) for s in symbols], axis=1
+            ).dropna(how="all")
+            result = calculate_metrics(primary_df, info(primary), bench_df, portfolio_prices=portfolio)
+            if result.empty:
+                st.warning("No usable market data were returned.")
+                return
+            result["Indicator"] = result["Direction"].map(_trend_badge) + " " + result["Direction"]
+            shown = result[result["Category"].eq(category)] if category != "All" else result
+            st.dataframe(
+                shown[["Indicator","ID","Metric","Category","Value","Trend","Performance Note"]],
+                use_container_width=True, hide_index=True
+            )
+            row = result[result.Metric.eq(selected_metric)].iloc[0]
+            a,b,c,d = st.columns(4)
+            a.metric("Metric", row["Metric"])
+            value = row["Value"]
+            b.metric("Current Value", "N/A" if pd.isna(value) else f"{value:,.4f}")
+            c.metric("Direction", f'{_trend_badge(row["Direction"])} {row["Direction"]}')
+            d.metric("Trend", row["Trend"])
+            st.info(row["Definition"])
+            st.write(row["Performance Note"])
+            st.download_button("Download 50-metric results", result.to_csv(index=False).encode(), f"{primary}_50_investment_metrics.csv", "text/csv")
+        except Exception as e:
+            st.error(f"Metric calculation failed: {e}")
+
+def financial_markets_page():
+    st.header("Financial Markets")
+    st.write("Financial markets connect buyers and sellers of financial assets. Global BLOC uses this section to organize market structure, participants, instruments, trends and analytical methods.")
+    tabs = st.tabs(["Overview","Market Types","Participants","Structure","Trends & Analysis","Terms"])
+    with tabs[0]:
+        st.subheader("What are financial markets?")
+        st.write("Financial markets are systems in which financial assets are issued, bought and sold. Their core economic functions include capital formation, liquidity and price discovery.")
+        st.dataframe(pd.DataFrame([
+            ["Raise capital","Companies and governments can obtain financing."],
+            ["Create liquidity","Participants can buy or sell financial assets."],
+            ["Price discovery","Transactions and information contribute to observable market prices."]
+        ], columns=["Function","Description"]), use_container_width=True, hide_index=True)
+    with tabs[1]:
+        for name, item in MARKET_TYPES.items():
+            with st.expander(name, expanded=False):
+                st.write(item["description"])
+                st.write("Examples:", item["examples"])
+                st.write("Global BLOC analytics:", item["analytics"])
+    with tabs[2]:
+        st.dataframe(pd.DataFrame([
+            ["Retail investors","Individuals investing or trading for their own accounts."],
+            ["Institutional investors","Organizations such as pension funds, mutual funds, insurers and asset managers."],
+            ["Market makers","Participants that facilitate liquidity by quoting buy and sell prices."],
+            ["Brokers","Intermediaries that facilitate execution and market access."],
+            ["Regulators","Public authorities that establish and enforce market rules."]
+        ], columns=["Participant","Role"]), use_container_width=True, hide_index=True)
+    with tabs[3]:
+        a,b = st.columns(2)
+        a.subheader("Primary Market")
+        a.write("New securities are issued to raise capital, such as an initial public offering or a new bond issue.")
+        b.subheader("Secondary Market")
+        b.write("Previously issued securities are traded among market participants.")
+    with tabs[4]:
+        st.subheader("Trend and analytical framework")
+        st.write("Uptrend: higher highs and higher lows. Downtrend: lower highs and lower lows. Sideways: relatively range-bound price behavior.")
+        st.write("Fundamental analysis examines financial and economic conditions. Technical analysis examines price, volume and indicators. Sentiment analysis examines observable market behavior and positioning.")
+        st.info("A trend indicator describes observed market structure. It does not establish that a future breakout, reversal or return is guaranteed.")
+    with tabs[5]:
+        term_search = st.text_input("Search market terms", key="market_term_search")
+        td = pd.DataFrame(MARKET_TERMS, columns=["Term","Definition"])
+        if term_search.strip():
+            td = td[td.Term.str.contains(term_search.strip(), case=False, na=False) | td.Definition.str.contains(term_search.strip(), case=False, na=False)]
+        st.dataframe(td, use_container_width=True, hide_index=True)
+
+def market_type_page(market_name):
+    item = MARKET_TYPES[market_name]
+    st.header(market_name)
+    st.write(item["description"])
+    st.caption(item["examples"])
+    ticker_defaults = {
+        "Stock Market (Equities)":"AAPL,MSFT,NVDA",
+        "Bond Market (Fixed Income)":"^TNX",
+        "Forex Market (FX)":"EURUSD=X,JPY=X,GBPUSD=X",
+        "Derivatives Market":"^VIX",
+        "Commodities Market":"CL=F,GC=F,ZW=F",
+        "Cryptocurrency Market":"BTC-USD,ETH-USD",
+    }
+    symbols = st.text_input("Market instruments", ticker_defaults[market_name], key=f"market_{market_name}")
+    if st.button("Analyze market", type="primary", key=f"analyze_{market_name}"):
+        rows=[]
+        for s in [x.strip() for x in symbols.split(",") if x.strip()]:
+            try:
+                d=market_data(s,"2y")
+                close=d.Close.dropna()
+                r=close.pct_change().dropna()
+                ann=r.std()*np.sqrt(252)
+                total=close.iloc[-1]/close.iloc[0]-1
+                trend="Uptrend" if close.tail(50).iloc[-1] > close.tail(50).iloc[0] else "Downtrend"
+                rows.append({"Ticker":s,"Last":close.iloc[-1],"2Y Return":total,"Annualized Volatility":ann,"Trend":trend})
+            except Exception as e:
+                rows.append({"Ticker":s,"Error":str(e)})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        if rows:
+            valid=[x for x in rows if "2Y Return" in x]
+            if valid:
+                st.plotly_chart(px.bar(pd.DataFrame(valid),x="Ticker",y="2Y Return",title=f"{market_name}: observed return"),use_container_width=True)
+    st.subheader("Analytical capabilities")
+    st.write(item["analytics"])
+    st.write("The market page can feed the same metric, risk, trend, benchmark, macro and ML engines used elsewhere in Global BLOC.")
+
 def metric_visualizations():
     st.header("350 Metrics — Visualization Workspace"); metric={"id":1,"name":"Simple Return","category":"return"}; opts=visualization_options(metric); chosen=st.selectbox("Visualization",opts,format_func=lambda x: ("* " if x["recommended"] else "")+x["name"]); st.caption(chosen["reason"]); st.write("Recommendations identify useful starting points; they do not restrict selection.")
 
 pages={
     "Overview":overview,
+    "Financial Markets":financial_markets_page,
+    "Stock Market":lambda: market_type_page("Stock Market (Equities)"),
+    "Bond Market":lambda: market_type_page("Bond Market (Fixed Income)"),
+    "Forex Market":lambda: market_type_page("Forex Market (FX)"),
+    "Derivatives Market":lambda: market_type_page("Derivatives Market"),
+    "Commodities Market":lambda: market_type_page("Commodities Market"),
+    "Cryptocurrency Market":lambda: market_type_page("Cryptocurrency Market"),
+    "50 Investment Metrics":investment_metrics_page,
     "Global Economy":global_economy,
     "12 Intelligence Domains":financial_domains,
     "Economics":economics,
