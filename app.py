@@ -540,6 +540,29 @@ def ratings_research_intelligence():
             "Primary research uses": "Pricing, valuation, hedging, credit risk, liquidity, stress testing, scenario analysis and portfolio exposure.",
             "GlobalBLOCS treatment": "Instrument metadata → market/credit data → risk metrics → scenario analysis → portfolio and macro context."
         })
+        st.subheader("Graduate-Level Product Profile")
+        st.caption("Standardized research schema for the institutional-finance reference manual and future pricing/risk engines.")
+        profile_template = {
+            "Definition":"Instrument description, economic exposure and contractual structure.",
+            "Purpose":"Financing, hedging, investment, liquidity or risk-transfer objective.",
+            "How it works":"Trade initiation, valuation, collateral/margin and settlement mechanics.",
+            "Parties involved":"Counterparties, issuers, investors, dealers, clearing parties and servicers as applicable.",
+            "Cash flows":"Premiums, coupons, floating/reference payments, principal, collateral and settlement flows.",
+            "Pricing methodology":"Discounted cash flow, no-arbitrage, option, curve, spread, model or market-comparable framework as appropriate.",
+            "Risk characteristics":"Market, credit, counterparty, liquidity, basis, model, legal, operational and settlement risks.",
+            "Return characteristics":"Coupon, carry, spread, capital gain/loss, optionality or leveraged exposure.",
+            "Typical buyers and sellers":"Institutional investors, banks, dealers, funds, corporations, governments or eligible counterparties.",
+            "Regulatory oversight":"Applicable securities, derivatives, banking, prudential, clearing and jurisdictional requirements.",
+            "Real-world applications":"Hedging, financing, asset-liability management, portfolio construction and risk transfer.",
+            "Python pricing / analytics":"Transparent educational pricing, sensitivity, scenario or risk calculation where applicable.",
+            "Market-data identifiers":"Provider-specific identifiers only when licensed/available; never invent identifiers.",
+            "Related regulatory filings":"Relevant public filings, reports, disclosures and transaction data where legally usable.",
+            "Advantages":"Potential structural or economic benefits, described without investment recommendations.",
+            "Disadvantages":"Costs, complexity, leverage, liquidity and structural limitations.",
+            "Historical examples":"Documented links to episodes such as LTCM, 2008, Archegos or SVB when factually established."
+        }
+        st.dataframe(pd.DataFrame([profile_template]).T.rename(columns={0:"Research Profile Template"}), use_container_width=True)
+        st.info("Identifiers and regulatory mappings are provider- and jurisdiction-specific and should be resolved from licensed/reference-data sources rather than guessed.")
 \ndef global_economy():
     st.header("Global Economy & Economic BLOCs")
     st.caption("Select a world region or economic BLOC, then analyze macroeconomic conditions, markets, exchanges and financial metrics.")
