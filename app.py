@@ -13,6 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
+from global_bloc_finance.recession_intelligence import assess_country, assess_bloc
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
@@ -103,6 +104,57 @@ def sec_filings(cik):
     r=requests.get(u,headers={"User-Agent":"GlobalBLOC research dashboard contact@example.com"},timeout=20)
     r.raise_for_status()
     return pd.DataFrame(r.json()["filings"]["recent"])
+
+
+def recession_intelligence_panel(iso3, label):
+    with st.spinner(f"Analyzing {label} macroeconomic and country-level activity..."):
+        assessment = assess_country(iso3, label)
+    if assessment.get("status") == "Insufficient data":
+        st.warning(f"Insufficient data for {label}.")
+        return
+    st.subheader(f"Recession & Business-Cycle Assessment — {label}")
+    st.caption("Transparent analytical screen using annual macroeconomic and activity indicators. It is not an official recession dating decision.")
+    a,b,c,d = st.columns(4)
+    a.metric("Assessment", assessment["status"])
+    b.metric("Confidence", f'{assessment["confidence"]*100:.0f}%')
+    c.metric("Real GDP Growth", f'{assessment["real_gdp_growth"]:.2f}%')
+    d.metric("Broad Weakening Signals", str(assessment["broad_weakening_signals"]))
+    evidence = pd.DataFrame([
+        ["Real GDP growth", assessment.get("real_gdp_growth"), "Macro"],
+        ["GDP per-capita growth", assessment.get("gdp_per_capita_growth"), "Macro"],
+        ["Inflation", assessment.get("inflation"), "Macro"],
+        ["Unemployment trend", assessment.get("unemployment_slope"), "Macro / labor"],
+        ["Household consumption growth", assessment.get("household_consumption_growth"), "Micro / household demand"],
+        ["Investment growth", assessment.get("investment_growth"), "Micro / business investment"],
+        ["Trade growth", assessment.get("trade_growth"), "External sector"],
+    ], columns=["Indicator","Latest / trend","Analytical layer"])
+    st.dataframe(evidence, use_container_width=True, hide_index=True)
+    panel = assessment["panel"].reset_index()
+    if "real_gdp_growth" in panel:
+        st.plotly_chart(px.line(panel, x="year", y="real_gdp_growth", markers=True, title=f"{label}: Real GDP Growth"), use_container_width=True)
+    sector_cols = [x for x in ["manufacturing_value_added_growth","industry_value_added_growth","services_value_added_growth","agriculture_value_added_growth"] if x in panel]
+    if sector_cols:
+        latest = panel.tail(1)
+        sector_view = latest[["year"] + sector_cols].melt(id_vars="year", var_name="Sector metric", value_name="Growth")
+        st.dataframe(sector_view, use_container_width=True, hide_index=True)
+    st.info("A recession signal means the data satisfy GlobalBLOCS's transparent screening rule. It does not claim that a national statistical authority has officially dated a recession.")
+
+def bloc_recession_panel(bloc, members):
+    with st.spinner(f"Analyzing {bloc}..."):
+        result = assess_bloc(members)
+    st.subheader(f"Economic BLOC Recession Assessment — {bloc}")
+    if result["table"].empty:
+        st.warning("Insufficient data for this BLOC.")
+        return
+    a,b,c,d = st.columns(4)
+    a.metric("BLOC Assessment", result["status"])
+    b.metric("Countries with Recession Signal", f'{result["recession_share"]*100:.0f}%')
+    c.metric("Contraction / Risk", f'{result["contraction_share"]*100:.0f}%')
+    d.metric("Mean Real GDP Growth", f'{result["mean_real_gdp_growth"]:.2f}%')
+    table = result["table"].copy()
+    st.dataframe(table.sort_values(["status","real_gdp_growth"]), use_container_width=True, hide_index=True)
+    st.plotly_chart(px.bar(table.sort_values("real_gdp_growth"), x="iso3", y="real_gdp_growth", color="status", title=f"{bloc}: Real GDP Growth by Economy"), use_container_width=True)
+    st.caption("BLOC classification uses member-country breadth plus average real GDP growth. It is an analytical BLOC-wide signal, not an official supranational recession declaration.")
 
 def overview():
     st.header("Overview"); ticker=st.text_input("Ticker","AAPL").upper().strip(); period=st.selectbox("History",["6mo","1y","2y","5y","10y","max"],index=2)
@@ -206,6 +258,16 @@ def global_economy():
     cycle_country=st.selectbox("Economy to analyze",["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX"],key="cycle_country")
     if st.button("Apply Business Cycle concept",type="secondary"):
         business_cycle_panel(cycle_country,cycle_country)
+
+    st.subheader("Country recession analysis")
+    recession_country=st.selectbox("Country",["USA","CHN","DEU","JPN","GBR","IND","CAN","BRA","AUS","KOR","MEX"],key="recession_country")
+    if st.button("Analyze country recession evidence",type="secondary"):
+        recession_intelligence_panel(recession_country,recession_country)
+
+    if bloc != "None":
+        st.subheader("Economic BLOC recession analysis")
+        if st.button(f"Analyze {bloc} recession evidence",type="secondary"):
+            bloc_recession_panel(bloc,members)
 
     st.subheader("Global market and exchange analysis")
     tickers = st.text_input("Market/exchange tickers", "AAPL,MSFT,NVDA,TSM,7203.T,005930.KS")
