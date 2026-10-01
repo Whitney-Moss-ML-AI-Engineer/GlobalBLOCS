@@ -7,3 +7,5 @@ scikit-learn>=1.5
 statsmodels>=0.14
 xgboost>=2.1
 yfinance>=0.2.54
+
+requests>=2.32
