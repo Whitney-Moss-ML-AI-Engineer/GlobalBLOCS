@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
 from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
 from global_bloc_finance.investment_metrics import METRICS, calculate_metrics, metric_catalog
-from global_bloc_finance.recession_intelligence import assess_country, assess_bloc\nfrom global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, regulatory_source_config, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
+from global_bloc_finance.recession_intelligence import assess_country, assess_bloc\nfrom global_bloc_finance.research_providers import (provider_dataframe, priority_provider_dataframe, regulatory_dataframe, REGULATORY_SOURCE_CONFIG, RATING_API_TEMPLATES, product_dataframe, credentialed_request_template)
 # Executable Business Cycle concept application
 CYCLE_INDICATORS = {"Real GDP Growth":"NY.GDP.MKTP.KD.ZG","Inflation":"FP.CPI.TOTL.ZG","Unemployment":"SL.UEM.TOTL.ZS","Investment Growth":"NE.GDI.FTOT.KD.ZG"}
 COUNTRY_ISO3 = {"United States":"USA","China":"CHN","Germany":"DEU","Japan":"JPN","United Kingdom":"GBR","India":"IND","Canada":"CAN","Brazil":"BRA","Australia":"AUS","South Korea":"KOR","Mexico":"MEX","France":"FRA","Italy":"ITA","Spain":"ESP","Singapore":"SGP","Saudi Arabia":"SAU","United Arab Emirates":"ARE"}
@@ -465,8 +465,8 @@ def ratings_research_intelligence():
         c.metric("Access", selected_reg["public_access"])
         st.dataframe(regs[["agency","reports","purpose","public_access"]], use_container_width=True, hide_index=True)
         st.subheader("Regulatory data-source configuration")
-        source_name = st.selectbox("Source configuration", list(regulatory_source_config.keys()), key="reg_source")
-        cfg = regulatory_source_config[source_name]
+        source_name = st.selectbox("Source configuration", list(REGULATORY_SOURCE_CONFIG.keys()), key="reg_source")
+        cfg = REGULATORY_SOURCE_CONFIG[source_name]
         st.json(cfg)
         st.info("Restricted datasets such as SAR filings are not treated as public ingestion targets. GlobalBLOCS should ingest only data for which the user has lawful authorization and the applicable provider terms permit automated use.")
 
