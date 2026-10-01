@@ -402,7 +402,138 @@ def us_macro_dashboard():
 
 
 
-def ratings_research_intelligence():
+def institutional_products_dashboard():
+    st.header("Institutional Products & U.S. Securities Intelligence")
+    st.caption(
+        "Interactive research workspace for derivatives, structured products, fixed income and short-term funding instruments. "
+        "Select a product concept, review its structure, then inspect the mapped U.S. security universe and market observations."
+    )
+
+    PRODUCT_GROUPS = {
+        "Derivatives": [
+            "Total Return Swaps (TRS)",
+            "Credit Default Swaps (CDS)",
+            "Interest Rate Swaps",
+            "Currency Swaps",
+            "Cross-Currency Swaps",
+            "Equity Swaps",
+            "Variance Swaps",
+            "Volatility Swaps",
+            "Inflation Swaps",
+            "Commodity Swaps",
+            "Swaptions",
+            "SOFR Futures",
+        ],
+        "Structured Credit": [
+            "Collateralized Loan Obligations (CLOs)",
+            "Collateralized Debt Obligations (CDOs)",
+            "Mortgage-Backed Securities (MBS)",
+            "Residential Mortgage-Backed Securities (RMBS)",
+            "Commercial Mortgage-Backed Securities (CMBS)",
+            "Structured Notes",
+        ],
+        "Fixed Income & Funding": [
+            "U.S. Treasuries",
+            "Floating Rate Notes (FRNs)",
+            "Convertible Bonds",
+            "Commercial Paper",
+            "Repurchase Agreements (Repos)",
+        ],
+    }
+
+    flat_products = [(group, product) for group, items in PRODUCT_GROUPS.items() for product in items]
+    left, right = st.columns([1, 2])
+    with left:
+        group = st.selectbox("Product group", list(PRODUCT_GROUPS.keys()), key="inst_product_group")
+        product = st.selectbox("Product / concept", PRODUCT_GROUPS[group], key="inst_product")
+    with right:
+        st.subheader(product)
+        st.write({
+            "Product group": group,
+            "Research focus": "Pricing, valuation, cash flows, market risk, credit/counterparty risk, liquidity, stress testing and regulatory intelligence.",
+            "Security linkage": "Underlying, reference, collateral, issuer, benchmark or financing security as applicable."
+        })
+
+    profiles = {
+        "Total Return Swaps (TRS)": ("Synthetic total-return exposure to a reference asset in exchange for financing or another agreed payment stream.", "Reference asset + financing leg + counterparty exposure"),
+        "Credit Default Swaps (CDS)": ("Credit-risk transfer contract referencing an issuer or obligation.", "Reference entity/obligation + premium + protection payment"),
+        "Interest Rate Swaps": ("Contract exchanging interest-rate cash flows, commonly fixed for floating.", "Notional + fixed leg + floating benchmark"),
+        "Currency Swaps": ("Swap exchanging cash flows denominated in different currencies.", "Currency notionals + interest legs + FX exposure"),
+        "Cross-Currency Swaps": ("Multi-currency funding or hedging contract exchanging principal and interest cash flows.", "Two currencies + funding curves + FX"),
+        "Equity Swaps": ("Derivative providing economic exposure to equity returns without direct ownership.", "Equity/index return + financing leg"),
+        "Variance Swaps": ("Contract transferring realized variance exposure against a fixed variance strike.", "Realized variance + variance strike"),
+        "Volatility Swaps": ("Derivative whose payoff is linked directly to realized volatility.", "Realized volatility + volatility strike"),
+        "Inflation Swaps": ("Contract exchanging inflation-linked cash flows for fixed or other reference payments.", "Inflation index + fixed leg"),
+        "Commodity Swaps": ("Derivative exchanging commodity-linked payments for fixed or floating payments.", "Commodity reference price + swap terms"),
+        "Swaptions": ("Options granting the right, but not obligation, to enter an interest-rate swap.", "Option premium + swap rate + volatility + rates curve"),
+        "SOFR Futures": ("Exchange-traded futures contracts referencing the Secured Overnight Financing Rate.", "SOFR reference + contract convention + futures price"),
+        "Collateralized Loan Obligations (CLOs)": ("Structured securities backed primarily by pools of leveraged loans with tranched cash flows.", "Loan collateral + waterfall + tranches + manager"),
+        "Collateralized Debt Obligations (CDOs)": ("Structured credit vehicles issuing tranches against diversified debt exposures.", "Collateral pool + waterfall + tranche structure"),
+        "Mortgage-Backed Securities (MBS)": ("Securities backed by pools of mortgage loans and their associated cash flows.", "Mortgage collateral + prepayments + interest + principal"),
+        "Residential Mortgage-Backed Securities (RMBS)": ("MBS backed specifically by residential mortgage exposures.", "Residential mortgages + prepayment/default behavior"),
+        "Commercial Mortgage-Backed Securities (CMBS)": ("Securities backed by commercial real-estate mortgage cash flows.", "Commercial property loans + property cash flows"),
+        "Structured Notes": ("Debt securities whose payoff is linked to rates, equities, commodities, currencies or other reference variables.", "Issuer debt + embedded derivative"),
+        "U.S. Treasuries": ("Debt obligations issued by the U.S. Treasury across bills, notes and bonds.", "Par value + coupon/discount + Treasury curve"),
+        "Floating Rate Notes (FRNs)": ("Debt securities whose coupon resets periodically using a reference rate plus a spread.", "Reference rate + spread + reset schedule"),
+        "Convertible Bonds": ("Corporate debt securities containing an option to convert into equity under specified terms.", "Bond cash flows + embedded equity option"),
+        "Commercial Paper": ("Short-term unsecured corporate debt used primarily for working-capital financing.", "Issuer credit + maturity + discount/yield"),
+        "Repurchase Agreements (Repos)": ("Short-term secured financing structured as a sale and later repurchase of securities.", "Collateral security + repo rate + haircut + maturity"),
+    }
+    definition, linkage = profiles[product]
+
+    st.markdown("### Product profile")
+    a,b,c = st.columns(3)
+    a.metric("Product", product)
+    b.metric("Structure", group)
+    c.metric("Primary linkage", linkage)
+    st.write(definition)
+
+    tabs = st.tabs(["Security Universe", "Visualization", "Analytics", "Regulatory / Research"])
+    with tabs[0]:
+        st.subheader("U.S. base securities and reference instruments")
+        # Reuse the concept security engine with product-specific concept text.
+        concept_security_panel(product)
+
+    with tabs[1]:
+        st.subheader("Product market visualization")
+        st.info("Select a mapped U.S. security in the Security Universe tab to populate the market history and risk visualization.")
+        st.markdown("**Core visualization set:** price/value history • return • volatility • drawdown • volume/liquidity where available • comparative benchmark.")
+        if product in {"U.S. Treasuries","Floating Rate Notes (FRNs)","Commercial Paper","Repurchase Agreements (Repos)"}:
+            st.markdown("**Fixed-income/funding lens:** yield/price relationship • duration • spread • curve exposure • funding/liquidity context.")
+        elif group == "Structured Credit":
+            st.markdown("**Structured-credit lens:** collateral performance • tranche/waterfall exposure • spread • prepayment/default assumptions • scenario sensitivity.")
+        else:
+            st.markdown("**Derivatives lens:** underlying/reference asset • implied/realized risk • basis • counterparty exposure • scenario payoff.")
+
+    with tabs[2]:
+        st.subheader("Research analytics")
+        metrics = {
+            "TRS / Equity Swaps": ["Underlying return","Financing cost","Total return","Counterparty exposure","Basis risk"],
+            "CDS": ["Credit spread","Default probability","Recovery assumption","CS01","Counterparty exposure"],
+            "Swaps / Swaptions": ["Par swap rate","DV01","Duration","Convexity","Volatility / vega"],
+            "SOFR Futures": ["Implied rate","Price change","Curve position","DV01","Basis"],
+            "CLOs / CDOs": ["Collateral quality","Spread","Default sensitivity","Recovery","Tranche attachment/detachment"],
+            "MBS / RMBS / CMBS": ["Yield","Duration","Convexity","Prepayment sensitivity","Credit spread"],
+            "Structured Notes": ["Reference return","Embedded option value","Issuer credit","Payoff scenarios","Liquidity"],
+            "Treasuries": ["Yield","Duration","DV01","Convexity","Curve spread"],
+            "FRNs": ["Reference rate","Spread","Reset risk","Credit spread","Duration"],
+            "Convertibles": ["Bond floor","Conversion value","Delta","Credit spread","Equity volatility"],
+            "Commercial Paper": ["Discount/yield","Maturity","Issuer credit","Liquidity","Spread"],
+            "Repos": ["Repo rate","Haircut","Collateral value","Funding cost","Counterparty exposure"],
+        }
+        key = next((k for k in metrics if k in product or product in k), "Treasuries")
+        st.dataframe(pd.DataFrame({"Analytical metric": metrics[key]}), use_container_width=True, hide_index=True)
+
+    with tabs[3]:
+        st.subheader("Regulatory and institutional research")
+        st.write({
+            "Regulatory scope": "Map by instrument, transaction venue, counterparty, issuer and jurisdiction.",
+            "Research sources": "SEC, CFTC, Federal Reserve, FINRA, OCC, FDIC and authorized commercial research/data providers where applicable.",
+            "Point-in-time control": "Preserve publication/availability timestamps so historical analysis and ML features do not use information unavailable at the prediction time.",
+        })
+        st.caption("Commercial identifiers, transaction-level data and proprietary analytics must be resolved through licensed/reference-data sources rather than guessed.")
+
+def ratings_research_intelligence()\n    institutional_products_dashboard():
     st.header("Ratings, Research & Financial Intelligence")
     st.caption("Institutional research layer for credit ratings, equity research, market intelligence, bank research, ESG, risk providers, regulatory reports and financial instruments.")
     tabs = st.tabs(["Providers","Credit Ratings","Regulatory Intelligence","API Architecture","Products"])
