@@ -1,4 +1,5 @@
 """Global BLOC functional Streamlit dashboard."""
+import json
 import math
 from datetime import date
 import numpy as np
@@ -962,3 +963,5 @@ st.sidebar.subheader("Data Connections")
 _api_page = st.sidebar.selectbox("Workspace", ["Dashboard", "Credentialed API Ingestion"], key="globalblocs_workspace")
 if _api_page == "Credentialed API Ingestion":
     api_ingestion_dashboard()
+else:
+    overview()
