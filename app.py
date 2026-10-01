@@ -11,6 +11,12 @@ from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from global_bloc_finance.visualization_registry import visualization_options
+from global_bloc_finance.economic_concepts import MACRO_CONCEPTS, MICRO_CONCEPTS
+from global_bloc_finance.global_intelligence import (
+    FINANCIAL_DOMAINS, ECONOMIC_BLOCS, REGIONS, MAP_INDICATORS,
+    worldbank_all, worldbank_country, bloc_members, map_figure,
+    bloc_market_summary
+)
 
 st.set_page_config(page_title="Global BLOC", page_icon="🌐", layout="wide")
 st.title("Global BLOC Financial Intelligence")
@@ -111,8 +117,112 @@ def installation():
         except Exception as e: rows.append({"Package":p,"Status":"Missing","Version":str(e)})
     st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True); st.code("pip install -r requirements.txt",language="bash"); st.info("Runtime diagnostics only; no silent OS changes.")
 
+def global_economy():
+    st.header("Global Economy & Economic BLOCs")
+    st.caption("Select a world region or economic BLOC, then analyze macroeconomic conditions, markets, exchanges and financial metrics.")
+    bloc = st.selectbox("Economic BLOC", ["None"] + list(ECONOMIC_BLOCS.keys()))
+    region = st.selectbox("Region", list(REGIONS.keys()))
+    indicator = st.selectbox("Map indicator", list(MAP_INDICATORS.keys()))
+    year = st.slider("Map year", 2000, date.today().year, date.today().year-1)
+    members = bloc_members(bloc, region)
+    if members:
+        st.info(f"Active geography: {bloc if bloc != 'None' else region} • {len(members)} selected economies")
+    if st.button("Load global economic map", type="primary"):
+        try:
+            d = worldbank_all(MAP_INDICATORS[indicator], year)
+            if members:
+                d = d[d.iso3.isin(members)]
+            fig = map_figure(d, f"{indicator} — {year}")
+            if fig: st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(d.sort_values("value", ascending=False), use_container_width=True, hide_index=True)
+            st.download_button("Export map data", d.to_csv(index=False).encode(), "global_economy_map.csv", "text/csv")
+        except Exception as e:
+            st.error(f"Global map request failed: {e}")
+
+    st.subheader("Global market and exchange analysis")
+    tickers = st.text_input("Market/exchange tickers", "AAPL,MSFT,NVDA,TSM,7203.T,005930.KS")
+    domain = st.selectbox("Financial-intelligence domain", [x["name"] for x in FINANCIAL_DOMAINS])
+    if st.button("Analyze selected markets", type="secondary"):
+        d = bloc_market_summary(tickers, domain)
+        st.dataframe(d, use_container_width=True, hide_index=True)
+        if not d.empty:
+            st.plotly_chart(px.bar(d, x="Ticker", y="Annual Volatility", title=f"{domain}: market volatility"), use_container_width=True)
+
+def financial_domains():
+    st.header("12 Financial Intelligence Domains")
+    st.caption("Each domain is an end-user research module rather than a static description.")
+    names = [x["name"] for x in FINANCIAL_DOMAINS]
+    selected = st.selectbox("Domain", names)
+    domain = next(x for x in FINANCIAL_DOMAINS if x["name"] == selected)
+    a,b = st.columns(2)
+    a.subheader(domain["name"]); a.write(domain["focus"])
+    b.subheader("Core analytics"); b.write(", ".join(domain["metrics"]))
+    tickers = st.text_input("Analyze securities/exchanges", "AAPL,MSFT,NVDA,TSM", key="domain_tickers")
+    if st.button("Run domain analysis", type="primary"):
+        d = bloc_market_summary(tickers, selected)
+        if d.empty: st.warning("No market data returned for the selected instruments.")
+        else:
+            st.dataframe(d, use_container_width=True, hide_index=True)
+            numeric = [x for x in ["1Y Return","Annual Volatility","Sharpe","Max Drawdown"] if x in d.columns]
+            if numeric:
+                metric = st.selectbox("Domain chart metric", numeric)
+                st.plotly_chart(px.bar(d, x="Ticker", y=metric, title=f"{selected}: {metric}"), use_container_width=True)
+    st.subheader("Global macro lens")
+    macro_indicator = st.selectbox("Macro indicator", list(MAP_INDICATORS.keys()), key="domain_macro")
+    macro_year = st.slider("Macro year", 2000, date.today().year, date.today().year-1, key="domain_year")
+    if st.button("Load domain macro data"):
+        try:
+            d = worldbank_all(MAP_INDICATORS[macro_indicator], macro_year)
+            st.plotly_chart(map_figure(d, f"{selected} — {macro_indicator} — {macro_year}"), use_container_width=True)
+        except Exception as e:
+            st.error(f"Macro data request failed: {e}")
+
+def economics_concepts():
+    st.header("100 Macroeconomic + 100 Microeconomic Concepts")
+    kind = "Macroeconomics" if st.session_state.get("concept_mode","Macroeconomics") == "Macroeconomics" else "Microeconomics"
+    concepts = MACRO_CONCEPTS if kind == "Macroeconomics" else MICRO_CONCEPTS
+    categories = ["All"] + sorted({x["category"] for x in concepts})
+    category = st.selectbox("Category", categories)
+    search = st.text_input("Search concepts")
+    d = pd.DataFrame(concepts)
+    if category != "All": d = d[d.category == category]
+    if search.strip(): d = d[d.name.str.contains(search.strip(), case=False, na=False)]
+    st.metric("Available concepts", len(d))
+    st.dataframe(d[["id","name","category","formula"]], use_container_width=True, hide_index=True)
+    st.download_button("Export concept library", d.to_csv(index=False).encode(), f"{kind.lower()}_concepts.csv", "text/csv")
+    st.subheader("Apply a concept to a global economy")
+    if not d.empty:
+        selected_name = st.selectbox("Select concept", d["name"].tolist())
+        selected = next(x for x in concepts if x["name"] == selected_name)
+        st.write({"Definition / Formula": selected["formula"], "World Bank indicator": selected.get("indicator") or "Concept requires a specialized calculation/data source."})
+        indicator_code = selected.get("indicator")
+        if indicator_code:
+            country = st.text_input("ISO-3 country code", "USA").upper().strip()
+            if st.button("Calculate historical series"):
+                try:
+                    series = worldbank_country(indicator_code, country)
+                    st.plotly_chart(px.line(series, x="year", y="value", markers=True, title=f"{selected_name} — {country}"), use_container_width=True)
+                    st.dataframe(series.tail(20), use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(f"Concept data request failed: {e}")
+
 def metric_visualizations():
     st.header("350 Metrics — Visualization Workspace"); metric={"id":1,"name":"Simple Return","category":"return"}; opts=visualization_options(metric); chosen=st.selectbox("Visualization",opts,format_func=lambda x: ("* " if x["recommended"] else "")+x["name"]); st.caption(chosen["reason"]); st.write("Recommendations identify useful starting points; they do not restrict selection.")
 
-pages={"Overview":overview,"Economics":economics,"Stock Exchanges":exchanges,"Banking & Regulation":regulation,"Import / Export":trade,"Industry Sectors":sectors,"ML / Deep Learning":ml,"Data Explorer":explorer,"Installation":installation,"350 Metrics":metric_visualizations}
+pages={
+    "Overview":overview,
+    "Global Economy":global_economy,
+    "12 Intelligence Domains":financial_domains,
+    "Economics":economics,
+    "Macroeconomic Concepts":lambda: (st.session_state.update(concept_mode="Macroeconomics"), economics_concepts())[1],
+    "Microeconomic Concepts":lambda: (st.session_state.update(concept_mode="Microeconomics"), economics_concepts())[1],
+    "Stock Exchanges":exchanges,
+    "Banking & Regulation":regulation,
+    "Import / Export":trade,
+    "Industry Sectors":sectors,
+    "ML / Deep Learning":ml,
+    "Data Explorer":explorer,
+    "Installation":installation,
+    "350 Metrics":metric_visualizations
+}
 selection=st.sidebar.radio("Global BLOC modules",list(pages)); pages[selection]()
