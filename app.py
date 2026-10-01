@@ -957,7 +957,6 @@ def economics_concepts():
     st.subheader("Concept → U.S. Security Mapping")
     st.write("Mapped security groups:", ", ".join(concept_security_categories(selected_name)))
     concept_security_panel(selected_name)
-)
 # GlobalBLOCS credentialed API ingestion page.
 st.sidebar.markdown("---")
 st.sidebar.subheader("Data Connections")
